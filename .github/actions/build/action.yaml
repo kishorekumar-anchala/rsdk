@@ -40,6 +40,11 @@ runs:
         remove-haskell: true
         remove-codeql: true
         remove-docker-images: true
+    - name: Install GCC 10
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-10 g++-10
+        
     - name: Setup rsdk
       uses: RadxaOS-SDK/rsdk/.github/actions/setup@main
     - name: Set suite based on input variables
@@ -65,7 +70,7 @@ runs:
         push: never
         runCmd: |
           src/bin/rsdk setup
-          if ! src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }} --debug; then
+          if ! src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }} --debug --verbose; then
             cat out/${{ inputs.product }}*/rootfs/var/lib/dkms/radxa-overlays/0.1.20/build/make.log
             exit 1
           fi
