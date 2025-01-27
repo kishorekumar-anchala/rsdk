@@ -67,6 +67,7 @@ runs:
           src/bin/rsdk setup
           if ! src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }} --debug; then
             cat out/${{ inputs.product }}*/rootfs/var/lib/dkms/radxa-overlays/0.1.20/build/make.log
+            exit 1
           fi
     - name: Prepare for release
       id: prep
