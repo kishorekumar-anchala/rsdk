@@ -42,14 +42,7 @@ runs:
         remove-docker-images: true
     
     # Install GCC 13 (updated version)
-    - name: Install GCC 13
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc-13 g++-13
-        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 13
-        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 13
-      shell: bash
-    
+ 
     # Kernel-specific steps (if any) - customize based on Azure kernel needs
     - name: Install Azure-Specific Kernel Dependencies (if any)
       run: |
