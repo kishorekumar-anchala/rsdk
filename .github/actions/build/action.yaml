@@ -59,6 +59,7 @@ runs:
       uses: RadxaOS-SDK/rsdk/.github/actions/setup@main
 
     - name: List build output directory (debugging step)
+      shell : bash
       run: |
         echo "Listing contents of the 'out' directory..."
         ls -alh out/
