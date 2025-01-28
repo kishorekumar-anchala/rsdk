@@ -95,6 +95,7 @@ runs:
           fi
 
     - name: Check if build directory exists (safety check)
+      shell : bash
       run: |
         echo "Checking if out/rock-s0* exists..."
         if [ ! -d "out/rock-s0*" ]; then
