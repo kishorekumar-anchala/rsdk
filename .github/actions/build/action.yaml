@@ -40,10 +40,15 @@ runs:
         remove-haskell: true
         remove-codeql: true
         remove-docker-images: true
-    
-    # Install GCC 13 (updated version)
- 
-    # Kernel-specific steps (if any) - customize based on Azure kernel needs
+
+    - name: Install GCC 13
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-13 g++-13
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 13
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 13
+      shell: bash
+
     - name: Install Azure-Specific Kernel Dependencies (if any)
       run: |
         sudo apt-get install -y linux-headers-6.8.0-1017-azure
@@ -52,7 +57,12 @@ runs:
 
     - name: Setup rsdk
       uses: RadxaOS-SDK/rsdk/.github/actions/setup@main
-    
+
+    - name: List build output directory (debugging step)
+      run: |
+        echo "Listing contents of the 'out' directory..."
+        ls -alh out/
+
     - name: Set suite based on input variables
       shell: bash
       run: |
@@ -70,7 +80,7 @@ runs:
           options+=("--override-firmware" "${{ inputs.override-firmware }}")
         fi
         echo "options=${options[*]}" >> $GITHUB_ENV
-    
+
     - name: Build within devcontainer
       uses: devcontainers/ci@v0.3
       with:
@@ -78,10 +88,21 @@ runs:
         runCmd: |
           src/bin/rsdk setup
           if ! src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }} --debug --verbose; then
+            echo "Build failed. Here's the log output:"
             cat out/${{ inputs.product }}*/rootfs/var/lib/dkms/radxa-overlays/0.1.20/build/make.log
             dmesg | tail -20 # Capture the last 20 lines of the kernel ring buffer for troubleshooting
+            exit 1
           fi
-    
+
+    - name: Check if build directory exists (safety check)
+      run: |
+        echo "Checking if out/rock-s0* exists..."
+        if [ ! -d "out/rock-s0*" ]; then
+          echo "Build directory out/rock-s0* does not exist!"
+          exit 1
+        fi
+        cd out/rock-s0*
+
     - name: Prepare for release
       id: prep
       shell: bash
@@ -97,14 +118,14 @@ runs:
         done
         xz -vT 0 *.img *.tar
         find . -type f -exec sha512sum {} \; | tee "${BUILD_TUPLE}_${{ inputs.timestamp }}.sha512sum"
-    
+
     - name: Upload build outputs to Artifacts
       if: inputs.artifacts == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: ${{ steps.prep.outputs.BUILD_TUPLE }}
         path: out/**/*
-    
+
     - name: Upload build outputs to Release
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: xresloader/upload-to-github-release@v1
@@ -113,7 +134,7 @@ runs:
       with:
         release_id: ${{ inputs.release-id }}
         file: out/**/*
-    
+
     - name: Append changelog header
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -128,7 +149,7 @@ runs:
           ### SHA-512 Checksum
 
           ```
-    
+
     - name: Append checksum
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -136,7 +157,7 @@ runs:
         tag_name: ${{ inputs.tag_name }}
         append_body: true
         body_path: out/${{ steps.prep.outputs.BUILD_TUPLE }}/${{ steps.prep.outputs.BUILD_TUPLE }}_${{ inputs.timestamp }}.sha512sum
-    
+
     - name: Append changelog footer
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -145,7 +166,7 @@ runs:
         append_body: true
         body: |
           ```
-    
+
     - name: Rollback release
       if: failure() && inputs.release-id != '' && inputs.github-token != ''
       uses: author/action-rollback@1.0.4
