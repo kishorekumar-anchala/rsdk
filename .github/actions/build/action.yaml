@@ -45,7 +45,7 @@ runs:
       uses: RadxaOS-SDK/rsdk/.github/actions/setup@main
 
     - name: Set suite based on input variables
-      shell: bash  # Added shell property here
+      shell: bash
       run: |
         options=()
         if [[ "${{ inputs.test-repo }}" == "true" ]]
@@ -62,31 +62,17 @@ runs:
         fi
         echo "options=${options[*]}" >> $GITHUB_ENV
 
-    - name: Debug build environment (before setup)
-      shell: bash  # Added shell property here
-      run: |
-        echo "OS: $(uname -a)"
-        echo "Kernel Version: $(uname -r)"
-        echo "GLIBC Version: $(ldd --version)"
-        echo "Available Memory: $(free -h)"
-        echo "Disk Space: $(df -h)"
-        echo "CPU Info: $(lscpu)"
-        echo "Environment Variables:"
-        printenv
-
     - name: Build within devcontainer
       uses: devcontainers/ci@v0.3
       with:
         push: never
         runCmd: |
-          # Run initial setup
           src/bin/rsdk setup
-          # Start the build and capture logs
           src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }}
 
     - name: Prepare for release
       id: prep
-      shell: bash  # Added shell property here
+      shell: bash
       run: |
         cd out/${{ inputs.product }}*
         sudo chown -R $USER:$GROUPS .
@@ -106,16 +92,16 @@ runs:
       with:
         name: ${{ steps.prep.outputs.BUILD_TUPLE }}
         path: out/**/*
-      
+
     - name: Upload build outputs to Release
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: xresloader/upload-to-github-release@v1
       env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
+          GITHUB_TOKEN: ${{ inputs.github-token }}
       with:
         release_id: ${{ inputs.release-id }}
         file: out/**/*
-      
+
     - name: Append changelog header
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -155,16 +141,12 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github-token }}
       with:
         release_id: ${{ inputs.release-id }}
-        
-    - name: Debug after failure
-      if: failure()
-      shell: bash  # Added shell property here
+
+    - name: Cleanup workspace after build
+      shell: bash
       run: |
-        echo "Build failed, inspecting the logs and system state..."
-        echo "Checking system status:"
-        free -h
-        df -h
-        dmesg | tail -n 20
-        cat /var/log/syslog | tail -n 20
-        echo "Recent logs from the build process:"
-        tail -n 100 out/${{ inputs.product }}*/build.log || true
+        # Clean up any leftover files to prevent filling the disk
+        echo "Cleaning up unnecessary files..."
+        sudo rm -rf /mnt/*   # Make sure /mnt is cleared or moved elsewhere if it's full
+        sudo apt-get autoremove -y
+        sudo apt-get clean -y
