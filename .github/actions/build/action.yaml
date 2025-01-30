@@ -45,7 +45,7 @@ runs:
       uses: RadxaOS-SDK/rsdk/.github/actions/setup@main
 
     - name: Set suite based on input variables
-      shell: bash
+      shell: bash  # Added shell property here
       run: |
         options=()
         if [[ "${{ inputs.test-repo }}" == "true" ]]
@@ -63,6 +63,7 @@ runs:
         echo "options=${options[*]}" >> $GITHUB_ENV
 
     - name: Debug build environment (before setup)
+      shell: bash  # Added shell property here
       run: |
         echo "OS: $(uname -a)"
         echo "Kernel Version: $(uname -r)"
@@ -85,7 +86,7 @@ runs:
 
     - name: Prepare for release
       id: prep
-      shell: bash
+      shell: bash  # Added shell property here
       run: |
         cd out/${{ inputs.product }}*
         sudo chown -R $USER:$GROUPS .
@@ -129,7 +130,7 @@ runs:
           ### SHA-512 Checksum
 
           ```
-          
+
     - name: Append checksum
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -157,6 +158,7 @@ runs:
         
     - name: Debug after failure
       if: failure()
+      shell: bash  # Added shell property here
       run: |
         echo "Build failed, inspecting the logs and system state..."
         echo "Checking system status:"
