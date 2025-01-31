@@ -43,7 +43,7 @@ runs:
     - name: Setup rsdk
       uses: RadxaOS-SDK/rsdk/.github/actions/setup@main
     - name: Set suite based on input variables
-      shell: bash
+      shell: bash  # <-- Added shell definition
       run: |
         options=()
         if [[ "${{ inputs.test-repo }}" == "true" ]]
@@ -60,6 +60,7 @@ runs:
         fi
         echo "options=${options[*]}" >> $GITHUB_ENV
     - name: Ensure kernel headers and dependencies are installed
+      shell: bash  # <-- Added shell definition
       run: |
         echo "Installing required kernel headers and build dependencies..."
         sudo apt-get update
@@ -67,6 +68,7 @@ runs:
         sudo apt-get install -y u-boot-radxa-zero linux-headers-radxa-zero
         sudo apt-get install -y linux-image-radxa-zero
     - name: Build within devcontainer
+      shell: bash  # <-- Added shell definition
       uses: devcontainers/ci@v0.3
       with:
         push: never
@@ -75,7 +77,7 @@ runs:
           src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }}
     - name: Prepare for release
       id: prep
-      shell: bash
+      shell: bash  # <-- Added shell definition
       run: |
         cd out/${{ inputs.product }}*
         sudo chown -R $USER:$GROUPS .
