@@ -66,6 +66,28 @@ runs:
         runCmd: |
           src/bin/rsdk setup
           src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }}
+    - name: Check for DKMS build errors
+      run: |
+        if [ -f "/var/lib/dkms/radxa-overlays/0.1.20/build/make.log" ]; then
+          echo "Checking for DKMS build issues..."
+          cat /var/lib/dkms/radxa-overlays/0.1.20/build/make.log
+          if grep -q "error" /var/lib/dkms/radxa-overlays/0.1.20/build/make.log; then
+            echo "Error detected in DKMS build log, aborting further steps."
+            exit 1
+          fi
+        else
+          echo "No DKMS build log found."
+        fi
+    - name: Install missing dependencies for DKMS
+      run: |
+        echo "Ensuring all required dependencies for DKMS are installed..."
+        sudo apt-get update
+        sudo apt-get install -y build-essential libncurses-dev bison flex libssl-dev dkms
+    - name: Retry DKMS build and installation
+      run: |
+        echo "Attempting to rebuild the DKMS module..."
+        sudo dkms build radxa-overlays/0.1.20 || exit 1
+        sudo dkms install radxa-overlays/0.1.20 || exit 1
     - name: Prepare for release
       id: prep
       shell: bash
