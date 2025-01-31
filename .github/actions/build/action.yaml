@@ -1,5 +1,6 @@
 name: rsdk-build
 description: rsdk build Action
+
 inputs:
   product:
     required: true
@@ -27,9 +28,11 @@ inputs:
     required: false
   override-firmware:
     required: false
+
 runs:
   using: "composite"
   steps:
+    # Step 1: Maximize build space using easimon's action
     - name: Maximize build space
       uses: easimon/maximize-build-space@v10
       with:
@@ -41,27 +44,41 @@ runs:
         remove-codeql: true
         remove-docker-images: true
 
+    # Step 2: Setup rsdk using RadxaOS-SDK setup action
     - name: Setup rsdk
       uses: RadxaOS-SDK/rsdk/.github/actions/setup@main
 
+    # Step 3: Install Kernel Headers for Building Modules
+    - name: Install Kernel Headers
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y linux-headers-$(uname -r)
+
+    # Step 4: Install DKMS and Dependencies
+    - name: Install DKMS and Dependencies
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y dkms linux-headers-$(uname -r)
+
+    # Step 5: Set suite based on input variables
     - name: Set suite based on input variables
       shell: bash
       run: |
         options=()
-        if [[ "${{ inputs.test-repo }}" == "true" ]]
-        then
+        if [[ "${{ inputs.test-repo }}" == "true" ]]; then
           options+=("--test-repo")
         fi
-        if [[ -n "${{ inputs.override-kernel }}" ]]
-        then
+        if [[ -n "${{ inputs.override-kernel }}" ]]; then
           options+=("--override-kernel" "${{ inputs.override-kernel }}")
         fi
-        if [[ -n "${{ inputs.override-firmware }}" ]]
-        then
+        if [[ -n "${{ inputs.override-firmware }}" ]]; then
           options+=("--override-firmware" "${{ inputs.override-firmware }}")
         fi
         echo "options=${options[*]}" >> $GITHUB_ENV
 
+    # Step 6: Build within devcontainer using devcontainers/ci
     - name: Build within devcontainer
       uses: devcontainers/ci@v0.3
       with:
@@ -70,6 +87,7 @@ runs:
           src/bin/rsdk setup
           src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }}
 
+    # Step 7: Prepare for release
     - name: Prepare for release
       id: prep
       shell: bash
@@ -86,6 +104,7 @@ runs:
         xz -vT 0 *.img *.tar
         find . -type f -exec sha512sum {} \; | tee "${BUILD_TUPLE}_${{ inputs.timestamp }}.sha512sum"
 
+    # Step 8: Upload build outputs to Artifacts
     - name: Upload build outputs to Artifacts
       if: inputs.artifacts == 'true'
       uses: actions/upload-artifact@v4
@@ -93,6 +112,7 @@ runs:
         name: ${{ steps.prep.outputs.BUILD_TUPLE }}
         path: out/**/*
 
+    # Step 9: Upload build outputs to Release
     - name: Upload build outputs to Release
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: xresloader/upload-to-github-release@v1
@@ -102,6 +122,7 @@ runs:
         release_id: ${{ inputs.release-id }}
         file: out/**/*
 
+    # Step 10: Append changelog header
     - name: Append changelog header
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -117,6 +138,7 @@ runs:
 
           ```
 
+    # Step 11: Append checksum
     - name: Append checksum
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -125,6 +147,7 @@ runs:
         append_body: true
         body_path: out/${{ steps.prep.outputs.BUILD_TUPLE }}/${{ steps.prep.outputs.BUILD_TUPLE }}_${{ inputs.timestamp }}.sha512sum
 
+    # Step 12: Append changelog footer
     - name: Append changelog footer
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -134,6 +157,7 @@ runs:
         body: |
           ```
 
+    # Step 13: Rollback release in case of failure
     - name: Rollback release
       if: failure() && inputs.release-id != '' && inputs.github-token != ''
       uses: author/action-rollback@1.0.4
@@ -142,11 +166,12 @@ runs:
       with:
         release_id: ${{ inputs.release-id }}
 
-    - name: Cleanup workspace after build
+    # Step 14: Check DKMS Build Log if error occurs (after the build step)
+    - name: Check DKMS Build Log
       shell: bash
       run: |
-        # Clean up any leftover files to prevent filling the disk
-        echo "Cleaning up unnecessary files..."
-        sudo rm -rf /mnt/*   # Make sure /mnt is cleared or moved elsewhere if it's full
-        sudo apt-get autoremove -y
-        sudo apt-get clean -y
+        if [ -f /var/lib/dkms/radxa-overlays/0.1.20/build/make.log ]; then
+          cat /var/lib/dkms/radxa-overlays/0.1.20/build/make.log
+        else
+          echo "No DKMS make.log found."
+        fi
