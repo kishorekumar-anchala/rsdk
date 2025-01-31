@@ -1,5 +1,6 @@
 name: rsdk-build
 description: rsdk build Action
+
 inputs:
   product:
     required: true
@@ -27,9 +28,11 @@ inputs:
     required: false
   override-firmware:
     required: false
+
 runs:
   using: "composite"
   steps:
+    # Step 1: Maximize build space using easimon's action
     - name: Maximize build space
       uses: easimon/maximize-build-space@v10
       with:
@@ -40,25 +43,28 @@ runs:
         remove-haskell: true
         remove-codeql: true
         remove-docker-images: true
+
+    # Step 2: Setup rsdk using RadxaOS-SDK setup action
     - name: Setup rsdk
       uses: RadxaOS-SDK/rsdk/.github/actions/setup@main
+
+    # Step 3: Set suite options based on input variables
     - name: Set suite based on input variables
       shell: bash
       run: |
         options=()
-        if [[ "${{ inputs.test-repo }}" == "true" ]]
-        then
+        if [[ "${{ inputs.test-repo }}" == "true" ]]; then
           options+=("--test-repo")
         fi
-        if [[ -n "${{ inputs.override-kernel }}" ]]
-        then
+        if [[ -n "${{ inputs.override-kernel }}" ]]; then
           options+=("--override-kernel" "${{ inputs.override-kernel }}")
         fi
-        if [[ -n "${{ inputs.override-firmware }}" ]]
-        then
+        if [[ -n "${{ inputs.override-firmware }}" ]]; then
           options+=("--override-firmware" "${{ inputs.override-firmware }}")
         fi
         echo "options=${options[*]}" >> $GITHUB_ENV
+
+    # Step 4: Build within devcontainer using devcontainers/ci
     - name: Build within devcontainer
       uses: devcontainers/ci@v0.3
       with:
@@ -66,6 +72,8 @@ runs:
         runCmd: |
           src/bin/rsdk setup
           src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }}
+
+    # Step 5: Prepare for release (file renaming, checksum generation)
     - name: Prepare for release
       id: prep
       shell: bash
@@ -73,28 +81,34 @@ runs:
         cd out/${{ inputs.product }}*
         sudo chown -R $USER:$GROUPS .
         BUILD_TUPLE="$(basename "$(realpath .)")"
-        echo "BUILD_TUPLE=$BUILD_TUPLE" >> $GITHUB_OUTPUT
+        echo "BUILD_TUPLE=$BUILD_TUPLE" >> $GITHUB_ENV
         sed -i "s/rootfs.tar/${BUILD_TUPLE}_${{ inputs.timestamp }}.rootfs.tar/" build-image
-        for i in *
-        do
+        for i in *; do
           mv "$i" "${BUILD_TUPLE}_${{ inputs.timestamp }}.$i"
         done
         xz -vT 0 *.img *.tar
         find . -type f -exec sha512sum {} \; | tee "${BUILD_TUPLE}_${{ inputs.timestamp }}.sha512sum"
+        echo "BUILD_TUPLE=${BUILD_TUPLE}" >> $GITHUB_ENV
+
+    # Step 6: Upload build outputs to Artifacts (if artifacts input is true)
     - name: Upload build outputs to Artifacts
       if: inputs.artifacts == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ steps.prep.outputs.BUILD_TUPLE }}
+        name: ${{ env.BUILD_TUPLE }}
         path: out/**/*
+
+    # Step 7: Upload build outputs to GitHub Release (if release-id and github-token are provided)
     - name: Upload build outputs to Release
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: xresloader/upload-to-github-release@v1
       env:
-          GITHUB_TOKEN: ${{ inputs.github-token }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
       with:
         release_id: ${{ inputs.release-id }}
         file: out/**/*
+
+    # Step 8: Append changelog header to the release body (if release-id and github-token are provided)
     - name: Append changelog header
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -102,20 +116,24 @@ runs:
         tag_name: ${{ inputs.tag_name }}
         append_body: true
         body: |
-          ## ${{ steps.prep.outputs.BUILD_TUPLE }} 
+          ## ${{ env.BUILD_TUPLE }} 
 
-          [Download Image](https://github.com/radxa-build/${{ inputs.product }}/releases/download/${{ inputs.tag_name }}/${{ steps.prep.outputs.BUILD_TUPLE }}_${{ inputs.timestamp }}.output.img.xz)
+          [Download Image](https://github.com/radxa-build/${{ inputs.product }}/releases/download/${{ inputs.tag_name }}/${{ env.BUILD_TUPLE }}_${{ inputs.timestamp }}.output.img.xz)
 
           ### SHA-512 Checksum
 
           ```
+
+    # Step 9: Append checksum to the release body
     - name: Append checksum
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ inputs.tag_name }}
         append_body: true
-        body_path: out/${{ steps.prep.outputs.BUILD_TUPLE }}/${{ steps.prep.outputs.BUILD_TUPLE }}_${{ inputs.timestamp }}.sha512sum
+        body_path: out/${{ env.BUILD_TUPLE }}/${{ env.BUILD_TUPLE }}_${{ inputs.timestamp }}.sha512sum
+
+    # Step 10: Append changelog footer to the release body
     - name: Append changelog footer
       if: inputs.release-id != '' && inputs.github-token != ''
       uses: softprops/action-gh-release@v2
@@ -124,6 +142,8 @@ runs:
         append_body: true
         body: |
           ```
+
+    # Step 11: Rollback release if failure occurs (with release-id and github-token)
     - name: Rollback release
       if: failure() && inputs.release-id != '' && inputs.github-token != ''
       uses: author/action-rollback@1.0.4
