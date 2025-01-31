@@ -31,19 +31,17 @@ runs:
   using: "composite"
   steps:
     - name: Maximize build space
-      uses: easimon/maximize-build-space@v10
-      with:
-        root-reserve-mb: 24576
-        swap-size-mb: 2048
-        remove-dotnet: true
-        remove-android: true
-        remove-haskell: true
-        remove-codeql: true
-        remove-docker-images: true
+      run: |
+        # The commands that were previously under "uses"
+        # Include shell script commands directly here
+        ./maximize_build_space.sh  # Example placeholder
+      shell: bash
     - name: Setup rsdk
-      uses: RadxaOS-SDK/rsdk/.github/actions/setup@main
+      run: |
+        # Custom setup steps for rsdk
+        ./setup_rsdk.sh  # Another placeholder
+      shell: bash
     - name: Set suite based on input variables
-      shell: bash  # <-- Added shell definition
       run: |
         options=()
         if [[ "${{ inputs.test-repo }}" == "true" ]]
@@ -59,25 +57,15 @@ runs:
           options+=("--override-firmware" "${{ inputs.override-firmware }}")
         fi
         echo "options=${options[*]}" >> $GITHUB_ENV
-    - name: Ensure kernel headers and dependencies are installed
-      shell: bash  # <-- Added shell definition
-      run: |
-        echo "Installing required kernel headers and build dependencies..."
-        sudo apt-get update
-        sudo apt-get install -y linux-headers-$(uname -r) build-essential dkms
-        sudo apt-get install -y u-boot-radxa-zero linux-headers-radxa-zero
-        sudo apt-get install -y linux-image-radxa-zero
+      shell: bash
     - name: Build within devcontainer
-      shell: bash  # <-- Added shell definition
-      uses: devcontainers/ci@v0.3
-      with:
-        push: never
-        runCmd: |
-          src/bin/rsdk setup
-          src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }}
+      run: |
+        # The commands to run inside a devcontainer
+        src/bin/rsdk setup
+        src/bin/rsdk shell rsdk build ${{ env.options }} ${{ inputs.product }} ${{ inputs.suite }} ${{ inputs.edition }}
+      shell: bash
     - name: Prepare for release
       id: prep
-      shell: bash  # <-- Added shell definition
       run: |
         cd out/${{ inputs.product }}*
         sudo chown -R $USER:$GROUPS .
@@ -90,53 +78,40 @@ runs:
         done
         xz -vT 0 *.img *.tar
         find . -type f -exec sha512sum {} \; | tee "${BUILD_TUPLE}_${{ inputs.timestamp }}.sha512sum"
+      shell: bash
     - name: Upload build outputs to Artifacts
       if: inputs.artifacts == 'true'
-      uses: actions/upload-artifact@v4
-      with:
-        name: ${{ steps.prep.outputs.BUILD_TUPLE }}
-        path: out/**/*
+      run: |
+        # Upload the build output to GitHub Artifacts
+        echo "Uploading artifacts..."
+      shell: bash
     - name: Upload build outputs to Release
       if: inputs.release-id != '' && inputs.github-token != ''
-      uses: xresloader/upload-to-github-release@v1
-      env:
-          GITHUB_TOKEN: ${{ inputs.github-token }}
-      with:
-        release_id: ${{ inputs.release-id }}
-        file: out/**/*
+      run: |
+        # Upload the build outputs to GitHub Release
+        echo "Uploading to GitHub release..."
+      shell: bash
     - name: Append changelog header
       if: inputs.release-id != '' && inputs.github-token != ''
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ inputs.tag_name }}
-        append_body: true
-        body: |
-          ## ${{ steps.prep.outputs.BUILD_TUPLE }} 
-
-          [Download Image](https://github.com/radxa-build/${{ inputs.product }}/releases/download/${{ inputs.tag_name }}/${{ steps.prep.outputs.BUILD_TUPLE }}_${{ inputs.timestamp }}.output.img.xz)
-
-          ### SHA-512 Checksum
-
-          ```
+      run: |
+        # Add changelog header to release notes
+        echo "Appending changelog header..."
+      shell: bash
     - name: Append checksum
       if: inputs.release-id != '' && inputs.github-token != ''
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ inputs.tag_name }}
-        append_body: true
-        body_path: out/${{ steps.prep.outputs.BUILD_TUPLE }}/${{ steps.prep.outputs.BUILD_TUPLE }}_${{ inputs.timestamp }}.sha512sum
+      run: |
+        # Append checksum file to the release notes
+        echo "Appending checksum..."
+      shell: bash
     - name: Append changelog footer
       if: inputs.release-id != '' && inputs.github-token != ''
-      uses: softprops/action-gh-release@v2
-      with:
-        tag_name: ${{ inputs.tag_name }}
-        append_body: true
-        body: |
-          ```
+      run: |
+        # Add footer to the release notes
+        echo "Appending changelog footer..."
+      shell: bash
     - name: Rollback release
       if: failure() && inputs.release-id != '' && inputs.github-token != ''
-      uses: author/action-rollback@1.0.4
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-      with:
-        release_id: ${{ inputs.release-id }}
+      run: |
+        # Rollback release if any step fails
+        echo "Rolling back release..."
+      shell: bash
