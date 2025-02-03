@@ -80,17 +80,21 @@ runs:
       id: prep
       shell: bash
       run: |
-        cd out/${{ inputs.product }}*
-        sudo chown -R $USER:$GROUPS .
-        BUILD_TUPLE="$(basename "$(realpath .)")"
-        echo "BUILD_TUPLE=$BUILD_TUPLE" >> $GITHUB_OUTPUT
-        sed -i "s/rootfs.tar/${BUILD_TUPLE}_${{ inputs.timestamp }}.rootfs.tar/" build-image
-        for i in *
-        do
-          mv "$i" "${BUILD_TUPLE}_${{ inputs.timestamp }}.$i"
-        done
-        xz -vT 0 *.img *.tar
-        find . -type f -exec sha512sum {} \; | tee "${BUILD_TUPLE}_${{ inputs.timestamp }}.sha512sum"
+        if cd out/rock-pi-e*; then
+          sudo chown -R $USER:$GROUPS .
+          BUILD_TUPLE="$(basename "$(realpath .)")"
+          echo "BUILD_TUPLE=$BUILD_TUPLE" >> $GITHUB_OUTPUT
+          sed -i "s/rootfs.tar/${BUILD_TUPLE}_b25.rootfs.tar/" build-image
+          for i in *
+          do
+            mv "$i" "${BUILD_TUPLE}_b25.$i"
+          done
+          xz -vT 0 *.img *.tar
+          find . -type f -exec sha512sum {} \; | tee "${BUILD_TUPLE}_b25.sha512sum"
+        else
+          echo "Directory out/rock-pi-e* not found. Exiting..."
+          exit 1
+        fi
     - name: Upload build outputs to Artifacts
       if: inputs.artifacts == 'true'
       uses: actions/upload-artifact@v4
